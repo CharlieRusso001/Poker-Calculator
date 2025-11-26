@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poker Odds Calculator</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🃏 Poker Odds Calculator</h1>
+        
+        <div class="section">
+            <div class="section-title">Your Cards (Hole Cards)</div>
+            <div class="card-selection">
+                <div class="rank-selection" id="holeRankSelection"></div>
+                <div class="suit-selection" id="holeSuitSelection"></div>
+            </div>
+            <div class="selected-cards">
+                <div class="selected-cards-title">Selected Hole Cards:</div>
+                <div class="selected-cards-list" id="selectedHoleCards"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Community Cards (Flop/Turn/River)</div>
+            <div class="phase-selector">
+                <button class="phase-btn" data-phase="preflop" onclick="setGamePhase('preflop')">Pre-Flop</button>
+                <button class="phase-btn" data-phase="flop" onclick="setGamePhase('flop')">Flop</button>
+                <button class="phase-btn" data-phase="turn" onclick="setGamePhase('turn')">Turn</button>
+                <button class="phase-btn" data-phase="river" onclick="setGamePhase('river')">River</button>
+            </div>
+            <div class="phase-info" id="phaseInfo">Select up to 0 community cards (Pre-Flop)</div>
+            <div class="card-selection">
+                <div class="rank-selection" id="communityRankSelection"></div>
+                <div class="suit-selection" id="communitySuitSelection"></div>
+            </div>
+            <div class="selected-cards">
+                <div class="selected-cards-title">Selected Community Cards:</div>
+                <div class="selected-cards-list" id="selectedCommunityCards"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="input-group">
+                <label for="numDecks">Number of Decks</label>
+                <input type="number" id="numDecks" min="1" max="10" value="1" oninput="autoCalculate()">
+            </div>
+            <div class="input-group">
+                <label for="numPlayers">Number of Players</label>
+                <input type="number" id="numPlayers" min="2" max="10" value="2" oninput="autoCalculate()">
+            </div>
+        </div>
+
+        <div class="error" id="errorMessage"></div>
+
+        <div class="results" id="results">
+            <div class="result-title">Results</div>
+            <div class="result-item">
+                <span class="result-label">Win Probability:</span>
+                <span class="result-value" id="winProb">-</span>
+                <span class="result-value" id="winIndicatorValue" style="margin-left: 10px; font-size: 14px;"></span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">Tie Probability:</span>
+                <span class="result-value" id="tieProb">-</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">Loss Probability:</span>
+                <span class="result-value" id="lossProb">-</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">Best Hand:</span>
+                <span class="result-value" id="bestHand">-</span>
+            </div>
+        </div>
+
+        <div class="explanation">
+            <div class="explanation-title">How Odds Are Calculated</div>
+            <p>This calculator uses a <strong>Monte Carlo simulation</strong> method:</p>
+            <ol style="margin-left: 20px; margin-top: 8px;">
+                <li>It runs 50,000 simulated poker hands</li>
+                <li>For each simulation, it randomly deals the remaining unknown cards to complete the community cards and opponent hands</li>
+                <li>It evaluates your best 5-card hand against all opponents' best hands</li>
+                <li>It counts how many times you win, tie, or lose</li>
+                <li>The final percentages are calculated from these results</li>
+            </ol>
+            <p style="margin-top: 10px;">The more simulations run, the more accurate the results. This method accounts for all possible card combinations that could appear.</p>
+        </div>
+
+        <button class="random-btn" onclick="simulateRandomCards()">🎲 Simulate Random Cards</button>
+        <button class="view-simulations-btn" onclick="openSimulationsModal()">📊 View All Simulations</button>
+        <button class="view-simulations-btn" onclick="exportToPDF()">📄 Export All Simulations to PDF</button>
+    </div>
+
+    <!-- Simulations Modal -->
+    <div class="modal" id="simulationsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Simulation Details</div>
+                <button class="close-btn" onclick="closeSimulationsModal()">&times;</button>
+            </div>
+            <div class="simulation-list" id="simulationList">
+                <div style="text-align: center; color: #b8c5a0; padding: 20px;">
+                    No simulations available yet. Run a calculation to see details.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
