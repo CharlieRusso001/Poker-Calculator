@@ -273,6 +273,37 @@ input[type="number"]:focus {
 }
 
 
+.calculate-btn {
+    width: 100%;
+    padding: 14px;
+    background: #4a9d6a;
+    color: #f5f5dc;
+    border: 2px solid #66bb6a;
+    border-radius: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+.calculate-btn:hover {
+    background: #66bb6a;
+    transform: scale(1.02);
+}
+
+.calculate-btn:active {
+    transform: scale(0.98);
+}
+
+.calculate-btn:disabled {
+    background: #2d7a4f;
+    border-color: #2d7a4f;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
 .random-btn {
     width: 100%;
     padding: 14px;

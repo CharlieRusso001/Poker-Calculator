@@ -9,7 +9,6 @@ const suitColors = {
 
 let selectedHoleCards = [];
 let selectedCommunityCards = [];
-let calculationTimeout = null;
 let isCalculating = false;
 let selectedHoleRank = null;
 let selectedCommunityRank = null;
@@ -138,7 +137,6 @@ function selectSuit(suit, type) {
     updateCardDisplay();
     updateRankButtonStates();
     hideError();
-    autoCalculate();
 }
 
 // Update card display
@@ -163,7 +161,6 @@ function removeCard(index, type) {
         selectedCommunityCards.splice(index, 1);
     }
     updateCardDisplay();
-    autoCalculate();
 }
 
 // Set game phase
@@ -195,7 +192,6 @@ function setGamePhase(phase) {
     selectedCommunityRank = null;
     updateRankButtonStates();
     updateCardDisplay();
-    autoCalculate();
 }
 
 // Update rank button states
@@ -224,20 +220,50 @@ function hideError() {
     document.getElementById('errorMessage').classList.remove('show');
 }
 
-// Auto-calculate with debounce
-function autoCalculate() {
-    if (calculationTimeout) {
-        clearTimeout(calculationTimeout);
-    }
-    
-    calculationTimeout = setTimeout(() => {
-        if (!isCalculating) {
-            calculateOdds();
-        }
-    }, 300);
+// Get rank value for comparison
+function getRankValue(rank) {
+    const values = { 'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2 };
+    return values[rank];
 }
 
-// Evaluate poker hand
+// Check for straight and return high card value
+// Returns the highest possible straight high card, or null if no straight exists
+function checkStraight(rankValues) {
+    const unique = [...new Set(rankValues)].sort((a, b) => b - a);
+    if (unique.length < 5) return null;
+    
+    let bestStraightHigh = null;
+    
+    // Check for regular straights (try all possible starting positions)
+    for (let i = 0; i <= unique.length - 5; i++) {
+        let consecutive = true;
+        let highCard = unique[i];
+        
+        // Check if we have 5 consecutive cards starting from this position
+        for (let j = 1; j < 5; j++) {
+            if (unique[i + j] !== unique[i] - j) {
+                consecutive = false;
+                break;
+            }
+        }
+        
+        if (consecutive) {
+            // Found a straight - keep track of the highest one
+            if (!bestStraightHigh || highCard > bestStraightHigh) {
+                bestStraightHigh = highCard;
+            }
+        }
+    }
+    
+    // Check for A-2-3-4-5 straight (wheel) - only if we haven't found a better straight
+    if (!bestStraightHigh && unique.includes(14) && unique.includes(2) && unique.includes(3) && unique.includes(4) && unique.includes(5)) {
+        return 5; // Return 5 as high card for wheel
+    }
+    
+    return bestStraightHigh;
+}
+
+// Evaluate poker hand with full tie-breaker information
 function evaluateHand(cards) {
     if (cards.length < 5) return null;
     
@@ -253,78 +279,244 @@ function evaluateHand(cards) {
     
     rankValues.sort((a, b) => b - a);
     const counts = Object.values(rankCounts).sort((a, b) => b - a);
-    const isFlush = Object.values(suitCounts).some(count => count >= 5);
-    const isStraight = checkStraight(rankValues);
     
-    // Royal flush
-    if (isFlush && isStraight && rankValues.includes(14) && rankValues.includes(13)) {
-        return { strength: 9, name: 'Royal Flush' };
-    }
-    // Straight flush
-    if (isFlush && isStraight) {
-        return { strength: 8, name: 'Straight Flush' };
-    }
-    // Four of a kind
-    if (counts[0] === 4) {
-        return { strength: 7, name: 'Four of a Kind' };
-    }
-    // Full house
-    if (counts[0] === 3 && counts[1] === 2) {
-        return { strength: 6, name: 'Full House' };
-    }
-    // Flush
-    if (isFlush) {
-        return { strength: 5, name: 'Flush' };
-    }
-    // Straight
-    if (isStraight) {
-        return { strength: 4, name: 'Straight' };
-    }
-    // Three of a kind
-    if (counts[0] === 3) {
-        return { strength: 3, name: 'Three of a Kind' };
-    }
-    // Two pair
-    if (counts[0] === 2 && counts[1] === 2) {
-        return { strength: 2, name: 'Two Pair' };
-    }
-    // One pair
-    if (counts[0] === 2) {
-        return { strength: 1, name: 'One Pair' };
-    }
-    // High card
-    return { strength: 0, name: 'High Card' };
-}
-
-// Get rank value for comparison
-function getRankValue(rank) {
-    const values = { 'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2 };
-    return values[rank];
-}
-
-// Check for straight
-function checkStraight(rankValues) {
-    const unique = [...new Set(rankValues)].sort((a, b) => b - a);
-    if (unique.length < 5) return false;
+    // Find flush suit - prioritize suits with more cards, then highest cards
+    let flushSuit = null;
+    let maxFlushCount = 0;
+    let bestFlushHigh = 0;
     
-    // Check for regular straight
-    for (let i = 0; i <= unique.length - 5; i++) {
-        let consecutive = true;
-        for (let j = 1; j < 5; j++) {
-            if (unique[i + j] !== unique[i] - j) {
-                consecutive = false;
-                break;
+    for (const [suit, count] of Object.entries(suitCounts)) {
+        if (count >= 5) {
+            // Get the highest card in this flush suit
+            const suitCards = cards.filter(c => c.suit === suit).map(c => getRankValue(c.rank));
+            const suitHigh = Math.max(...suitCards);
+            
+            // Prefer suit with more cards, or if equal, prefer higher cards
+            if (count > maxFlushCount || (count === maxFlushCount && suitHigh > bestFlushHigh)) {
+                flushSuit = suit;
+                maxFlushCount = count;
+                bestFlushHigh = suitHigh;
             }
         }
-        if (consecutive) return true;
+    }
+    const isFlush = flushSuit !== null;
+    
+    // Get flush cards if flush exists - sorted descending, take best 5
+    const flushCards = isFlush ? cards
+        .filter(c => c.suit === flushSuit)
+        .map(c => getRankValue(c.rank))
+        .sort((a, b) => b - a)
+        .slice(0, 5) : null;
+    
+    const straightHigh = checkStraight(rankValues);
+    const isStraight = straightHigh !== null;
+    
+    // Check for straight flush - must check within the flush suit
+    let straightFlushHigh = null;
+    if (isFlush) {
+        // Get all rank values for cards in the flush suit
+        const flushRankValues = cards
+            .filter(c => c.suit === flushSuit)
+            .map(c => getRankValue(c.rank));
+        straightFlushHigh = checkStraight(flushRankValues);
     }
     
-    // Check for A-2-3-4-5 straight
-    if (unique.includes(14) && unique.includes(2) && unique.includes(3) && unique.includes(4) && unique.includes(5)) {
-        return true;
+    // Royal flush (A-K-Q-J-10 straight flush)
+    if (straightFlushHigh === 14) {
+        return { 
+            strength: 9, 
+            name: 'Royal Flush',
+            tieBreakers: [14, 13, 12, 11, 10],
+            cards: cards
+        };
     }
     
-    return false;
+    // Straight flush
+    if (straightFlushHigh !== null) {
+        const tieBreakers = [];
+        if (straightFlushHigh === 5 && rankValues.includes(14)) {
+            // Wheel straight flush (A-2-3-4-5)
+            tieBreakers.push(5, 4, 3, 2, 14);
+        } else {
+            // Regular straight flush
+            for (let i = 0; i < 5; i++) {
+                tieBreakers.push(straightFlushHigh - i);
+            }
+        }
+        return { 
+            strength: 8, 
+            name: 'Straight Flush',
+            tieBreakers: tieBreakers,
+            cards: cards
+        };
+    }
+    
+    // Four of a kind
+    if (counts[0] === 4) {
+        // Find the highest four of a kind (in case of multiple decks)
+        const fourOfKindRanks = Object.keys(rankCounts).filter(r => rankCounts[r] === 4);
+        const fourValues = fourOfKindRanks.map(r => getRankValue(r)).sort((a, b) => b - a);
+        const fourValue = fourValues[0]; // Highest four of a kind
+        
+        // Find highest kicker (excluding all four-of-a-kind ranks)
+        const kickers = rankValues.filter(v => !fourValues.includes(v)).sort((a, b) => b - a);
+        const kicker = kickers[0] || 0;
+        
+        return { 
+            strength: 7, 
+            name: 'Four of a Kind',
+            tieBreakers: [fourValue, kicker],
+            cards: cards
+        };
+    }
+    
+    // Full house
+    if (counts[0] === 3 && counts[1] === 2) {
+        // Find all three-of-a-kinds and pairs
+        const threeRanks = Object.keys(rankCounts).filter(r => rankCounts[r] === 3);
+        const pairRanks = Object.keys(rankCounts).filter(r => rankCounts[r] === 2);
+        
+        // Get highest three-of-a-kind and highest pair
+        const threeValues = threeRanks.map(r => getRankValue(r)).sort((a, b) => b - a);
+        const pairValues = pairRanks.map(r => getRankValue(r)).sort((a, b) => b - a);
+        
+        const threeValue = threeValues[0]; // Highest three-of-a-kind
+        const pairValue = pairValues[0]; // Highest pair
+        
+        return { 
+            strength: 6, 
+            name: 'Full House',
+            tieBreakers: [threeValue, pairValue],
+            cards: cards
+        };
+    }
+    
+    // Flush
+    if (isFlush) {
+        return { 
+            strength: 5, 
+            name: 'Flush',
+            tieBreakers: flushCards.slice(0, 5),
+            cards: cards
+        };
+    }
+    
+    // Straight
+    if (isStraight) {
+        const tieBreakers = [];
+        if (straightHigh === 5 && rankValues.includes(14)) {
+            // Wheel straight (A-2-3-4-5)
+            tieBreakers.push(5, 4, 3, 2, 14);
+        } else {
+            // Regular straight
+            for (let i = 0; i < 5; i++) {
+                tieBreakers.push(straightHigh - i);
+            }
+        }
+        return { 
+            strength: 4, 
+            name: 'Straight',
+            tieBreakers: tieBreakers,
+            cards: cards
+        };
+    }
+    
+    // Three of a kind
+    if (counts[0] === 3) {
+        // Find highest three-of-a-kind (in case of multiple decks)
+        const threeRanks = Object.keys(rankCounts).filter(r => rankCounts[r] === 3);
+        const threeValues = threeRanks.map(r => getRankValue(r)).sort((a, b) => b - a);
+        const threeValue = threeValues[0]; // Highest three-of-a-kind
+        
+        // Get highest kickers (excluding all three-of-a-kind ranks)
+        const kickers = rankValues
+            .filter(v => !threeValues.includes(v))
+            .sort((a, b) => b - a)
+            .slice(0, 2);
+        
+        return { 
+            strength: 3, 
+            name: 'Three of a Kind',
+            tieBreakers: [threeValue, ...kickers],
+            cards: cards
+        };
+    }
+    
+    // Two pair
+    if (counts[0] === 2 && counts[1] === 2) {
+        // Find all pairs and get the two highest
+        const pairRanks = Object.keys(rankCounts).filter(r => rankCounts[r] === 2);
+        const pairValues = pairRanks.map(r => getRankValue(r)).sort((a, b) => b - a);
+        
+        // Take the two highest pairs
+        const highPair = pairValues[0];
+        const lowPair = pairValues[1];
+        
+        // Find highest kicker (excluding all pair ranks)
+        const kickers = rankValues
+            .filter(v => !pairValues.includes(v))
+            .sort((a, b) => b - a);
+        const kicker = kickers[0] || 0;
+        
+        return { 
+            strength: 2, 
+            name: 'Two Pair',
+            tieBreakers: [highPair, lowPair, kicker],
+            cards: cards
+        };
+    }
+    
+    // One pair
+    if (counts[0] === 2) {
+        // Find highest pair (in case of multiple decks)
+        const pairRanks = Object.keys(rankCounts).filter(r => rankCounts[r] === 2);
+        const pairValues = pairRanks.map(r => getRankValue(r)).sort((a, b) => b - a);
+        const pairValue = pairValues[0]; // Highest pair
+        
+        // Get highest kickers (excluding all pair ranks)
+        const kickers = rankValues
+            .filter(v => !pairValues.includes(v))
+            .sort((a, b) => b - a)
+            .slice(0, 3);
+        
+        return { 
+            strength: 1, 
+            name: 'One Pair',
+            tieBreakers: [pairValue, ...kickers],
+            cards: cards
+        };
+    }
+    
+    // High card
+    return { 
+        strength: 0, 
+        name: 'High Card',
+        tieBreakers: rankValues.slice(0, 5),
+        cards: cards
+    };
+}
+
+// Compare two hands accurately
+function compareHands(hand1, hand2) {
+    // Compare by strength first
+    if (hand1.strength !== hand2.strength) {
+        return hand1.strength - hand2.strength;
+    }
+    
+    // If same strength, compare tie-breakers
+    const tieBreakers1 = hand1.tieBreakers || [];
+    const tieBreakers2 = hand2.tieBreakers || [];
+    
+    for (let i = 0; i < Math.max(tieBreakers1.length, tieBreakers2.length); i++) {
+        const val1 = tieBreakers1[i] || 0;
+        const val2 = tieBreakers2[i] || 0;
+        if (val1 !== val2) {
+            return val1 - val2;
+        }
+    }
+    
+    // Hands are equal
+    return 0;
 }
 
 // Get best 5-card hand from 7 cards
@@ -334,13 +526,22 @@ function getBestHand(cards) {
     
     // Try all combinations of 5 cards from 7
     let bestHand = null;
+    let bestCombo = null;
     const combinations = getCombinations(cards, 5);
     
     combinations.forEach(combo => {
         const hand = evaluateHand(combo);
-        if (!bestHand || hand.strength > bestHand.strength || 
-            (hand.strength === bestHand.strength && compareHands(hand, bestHand, combo, cards) > 0)) {
+        if (!hand) return;
+        
+        if (!bestHand) {
             bestHand = hand;
+            bestCombo = combo;
+        } else {
+            const comparison = compareHands(hand, bestHand);
+            if (comparison > 0) {
+                bestHand = hand;
+                bestCombo = combo;
+            }
         }
     });
     
@@ -359,12 +560,6 @@ function getCombinations(arr, k) {
     return combos;
 }
 
-// Compare hands (simplified)
-function compareHands(hand1, hand2, cards1, cards2) {
-    if (hand1.strength !== hand2.strength) return hand1.strength - hand2.strength;
-    return 0;
-}
-
 // Calculate odds using Monte Carlo simulation
 function calculateOdds() {
     if (isCalculating) return;
@@ -380,6 +575,7 @@ function calculateOdds() {
         document.getElementById('lossProb').textContent = '-';
         document.getElementById('bestHand').textContent = 'Select 2 hole cards';
         document.getElementById('winIndicatorValue').textContent = '';
+        isCalculating = false;
         return;
     }
     
@@ -390,6 +586,13 @@ function calculateOdds() {
         document.getElementById('bestHand').textContent = 'Invalid players';
         document.getElementById('winIndicatorValue').textContent = '';
         showError('Number of players must be between 2 and 10');
+        isCalculating = false;
+        // Re-enable button
+        const calculateBtn = document.querySelector('.calculate-btn');
+        if (calculateBtn) {
+            calculateBtn.disabled = false;
+            calculateBtn.textContent = '🎯 Calculate Odds';
+        }
         return;
     }
     
@@ -400,10 +603,24 @@ function calculateOdds() {
         document.getElementById('bestHand').textContent = 'Invalid decks';
         document.getElementById('winIndicatorValue').textContent = '';
         showError('Number of decks must be between 1 and 10');
+        isCalculating = false;
+        // Re-enable button
+        const calculateBtn = document.querySelector('.calculate-btn');
+        if (calculateBtn) {
+            calculateBtn.disabled = false;
+            calculateBtn.textContent = '🎯 Calculate Odds';
+        }
         return;
     }
     
     isCalculating = true;
+    
+    // Update button state
+    const calculateBtn = document.querySelector('.calculate-btn');
+    if (calculateBtn) {
+        calculateBtn.disabled = true;
+        calculateBtn.textContent = '⏳ Calculating...';
+    }
     
     // Get all known cards
     const knownCards = [...selectedHoleCards, ...selectedCommunityCards];
@@ -416,7 +633,8 @@ function calculateOdds() {
     }
     
     // Monte Carlo simulation (run asynchronously)
-    const simulations = 50000;
+    // Increased simulations for better accuracy
+    const simulations = 100000;
     let wins = 0;
     let ties = 0;
     let losses = 0;
@@ -456,11 +674,24 @@ function calculateOdds() {
                 !knownCards.some(known => known.rank === card.rank && known.suit === card.suit)
             );
             
-            // Shuffle
-            const shuffled = [...availableDeck].sort(() => Math.random() - 0.5);
+            // Shuffle using Fisher-Yates algorithm for better randomness
+            const shuffled = [...availableDeck];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
             
             // Complete community cards if needed
             const neededCommunity = 5 - selectedCommunityCards.length;
+            const neededOpponentCards = (numPlayers - 1) * 2;
+            const totalCardsNeeded = neededCommunity + neededOpponentCards;
+            
+            // Safety check: ensure we have enough cards
+            if (shuffled.length < totalCardsNeeded) {
+                console.warn(`Not enough cards in deck: need ${totalCardsNeeded}, have ${shuffled.length}`);
+                continue;
+            }
+            
             const community = [...selectedCommunityCards];
             for (let i = 0; i < neededCommunity; i++) {
                 community.push(shuffled[i]);
@@ -484,8 +715,10 @@ function calculateOdds() {
             
             // Evaluate all opponents' hands
             const opponentHands = [];
+            let cardIndex = neededCommunity;
             for (let p = 0; p < numPlayers - 1; p++) {
-                const opponentHole = [shuffled[neededCommunity + p * 2], shuffled[neededCommunity + p * 2 + 1]];
+                const opponentHole = [shuffled[cardIndex], shuffled[cardIndex + 1]];
+                cardIndex += 2;
                 const opponentCards = [...opponentHole, ...community];
                 const opponentHand = getBestHand(opponentCards);
                 if (opponentHand) {
@@ -493,24 +726,32 @@ function calculateOdds() {
                 }
             }
             
-            // Compare against all opponents
+            // Compare against all opponents using accurate hand comparison
             let playerWins = true;
             let playerTies = false;
             let bestOpponentHand = null;
-            let maxOpponentStrength = -1;
             let playersWithBetterHand = 0;
             let playersWithEqualHand = 0;
             
             for (const opponentHand of opponentHands) {
-                if (opponentHand.strength > playerHand.strength) {
+                const comparison = compareHands(opponentHand, playerHand);
+                
+                if (comparison > 0) {
+                    // Opponent has a better hand
                     playersWithBetterHand++;
-                    if (opponentHand.strength > maxOpponentStrength) {
-                        maxOpponentStrength = opponentHand.strength;
+                    if (!bestOpponentHand || compareHands(opponentHand, bestOpponentHand) > 0) {
                         bestOpponentHand = opponentHand;
                     }
-                } else if (opponentHand.strength === playerHand.strength) {
+                } else if (comparison === 0) {
+                    // Hands are equal
                     playersWithEqualHand++;
-                    if (!bestOpponentHand || opponentHand.strength >= bestOpponentHand.strength) {
+                    if (!bestOpponentHand) {
+                        bestOpponentHand = opponentHand;
+                    }
+                } else {
+                    // Player has better hand than this opponent
+                    // Keep track of best opponent hand for display purposes
+                    if (!bestOpponentHand || compareHands(opponentHand, bestOpponentHand) > 0) {
                         bestOpponentHand = opponentHand;
                     }
                 }
@@ -585,6 +826,13 @@ function calculateOdds() {
             updateWinIndicator(parseFloat(winProb), numPlayers);
             
             isCalculating = false;
+            
+            // Re-enable button
+            const calculateBtn = document.querySelector('.calculate-btn');
+            if (calculateBtn) {
+                calculateBtn.disabled = false;
+                calculateBtn.textContent = '🎯 Calculate Odds';
+            }
         }
     }
     
@@ -618,9 +866,6 @@ function simulateRandomCards() {
     updateCardDisplay();
     updateRankButtonStates();
     hideError();
-    
-    // Trigger calculation
-    autoCalculate();
 }
 
 // Open simulations modal
@@ -826,9 +1071,4 @@ window.onclick = function(event) {
 // Initialize on load
 initCardSelection();
 setGamePhase('preflop'); // Set initial phase
-
-// Initial calculation
-setTimeout(() => {
-    calculateOdds();
-}, 100);
 

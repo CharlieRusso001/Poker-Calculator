@@ -64,15 +64,17 @@
         <div class="section">
             <div class="input-group">
                 <label for="numDecks">Number of Decks</label>
-                <input type="number" id="numDecks" min="1" max="10" value="1" oninput="autoCalculate()">
+                <input type="number" id="numDecks" min="1" max="10" value="1">
             </div>
             <div class="input-group">
                 <label for="numPlayers">Number of Players</label>
-                <input type="number" id="numPlayers" min="2" max="10" value="2" oninput="autoCalculate()">
+                <input type="number" id="numPlayers" min="2" max="10" value="2">
             </div>
         </div>
 
         <div class="error" id="errorMessage"></div>
+
+        <button class="calculate-btn" onclick="calculateOdds()">🎯 Calculate Odds</button>
 
         <div class="results" id="results">
             <div class="result-title">Results</div>
@@ -99,13 +101,13 @@
             <div class="explanation-title">How Odds Are Calculated</div>
             <p>This calculator uses a <strong>Monte Carlo simulation</strong> method:</p>
             <ol style="margin-left: 20px; margin-top: 8px;">
-                <li>It runs 50,000 simulated poker hands</li>
+                <li>It runs 100,000 simulated poker hands</li>
                 <li>For each simulation, it randomly deals the remaining unknown cards to complete the community cards and opponent hands</li>
-                <li>It evaluates your best 5-card hand against all opponents' best hands</li>
+                <li>It evaluates your best 5-card hand against all opponents' best hands using accurate hand ranking with kickers and tie-breakers</li>
                 <li>It counts how many times you win, tie, or lose</li>
                 <li>The final percentages are calculated from these results</li>
             </ol>
-            <p style="margin-top: 10px;">The more simulations run, the more accurate the results. This method accounts for all possible card combinations that could appear.</p>
+            <p style="margin-top: 10px;">The more simulations run, the more accurate the results. This method accounts for all possible card combinations that could appear. Hand comparisons now properly consider kickers and tie-breakers for maximum accuracy.</p>
         </div>
 
         <button class="random-btn" onclick="simulateRandomCards()">🎲 Simulate Random Cards</button>
